@@ -102,12 +102,27 @@ You MUST complete these steps in order:
 | **核心功能** | 最核心的 1-3 个功能是什么？ | 优先级排序 |
 | **约束条件** | 技术栈 / 性能 / 时间上有哪些限制？ | 语言、框架、部署方式 |
 | **成功标准** | 怎样算"做完/做好"？ | 可验证的验收条件 |
+| **验证方式** | 如何验证功能已完成？ | 具体可执行的检查命令 |
 
 **提问原则：**
 - 一次只问一个问题
 - 优先用选择题："你倾向于 A 还是 B？"
 - 如果用户提供了足够的信息，跳过该维度
 - 当用户给出模糊回答时，追问具体细节
+
+**验证引导策略：**
+
+用户通常只能描述输入/输出的预期（"我 POST x 应该返回 201"），需要 agent 引导转化为可执行的验证命令：
+
+1. **具体化** — "你怎么确认创建成功？" → 引导用户给出：什么命令、什么输入、期望什么 HTTP 状态码/响应字段
+2. **边界追问** — 主动问："除了正常情况，有没有异常情况需要验证？比如缺少必填字段、重复创建、删除有子节点的父节点？"
+3. **模式匹配** — 根据项目技术栈推荐标准验证模式（见本 skill 末尾「验证设计指南」）：
+   - Symfony 配置任务 → `bin/console debug:config <alias>`
+   - 实体/数据库任务 → `bin/console doctrine:schema:validate`
+   - API 端点任务 → `curl` + HTTP 状态码 + JSON 响应检查
+4. **纠正模糊** — 如果用户说"确认创建成功就行"，追问："具体用什么方式确认？查数据库？调 API？看日志？"
+5. **补齐边界** — 对用户未提及但重要的边界情况提出建议："要不要也验证一下 404 的情况？"
+6. 对于用户不熟悉的技术领域（如 Symfony config alias），主动给出正确的命令格式，而非让用户猜测
 
 ### Step 3: 确定输出路径
 
@@ -175,7 +190,16 @@ You MUST complete these steps in order:
 > 2. 任务应按依赖关系排序（前置任务在前）
 > 3. 每个任务包含：标题、描述、验收标准、涉及文件
 > 4. 涉及文件路径必须基于实际项目结构，不能猜测或编造
-> 5. 输出格式为 JSON 数组，每项包含：id, title, description, acceptance_criteria, files, depends_on
+> 5. 输出格式为 JSON 数组，每项包含：id, title, description, acceptance_criteria, files, depends_on, **verification**
+> 6. **verification** 是字符串数组，每个元素是一条可直接在 bash 中执行的命令。所有命令将在 `set -e` 环境中执行，退出码 0 = 通过，非 0 = 失败。这是必填字段，不能为空数组，不能写 "TODO" 或 "请参见 verify.sh"。
+>
+> **验证命令设计原则：**
+>
+> 1. **退出码即判定** — feature-implement 只检查退出码，不解读命令输出。每条命令必须能通过退出码表达通过/失败。
+> 2. **不许人工判断** — 禁止 "手动 curl 测试"、"查看浏览器"、"检查日志输出" 等步骤。所有验证必须全自动。
+> 3. **真实命令 alias** — Symfony bundle 的 config alias 必须来自 `bin/console debug:config --list` 的实际输出。例如 validator 的配置在 `framework` extension 下，没有独立的 `framework.validation` alias。不确定时宁可不用也不要猜测。
+> 4. **参考验证模式** — 根据不同任务类型选择验证模式：安装类用 `composer show`，配置类用 `bin/console debug:config <真实alias>`，实体类用 `bin/console doctrine:schema:validate`，控制器类用 `bin/console debug:router`，测试类用 `php bin/phpunit --filter=X`。
+> 5. **考虑边界** — 不仅要验证正常路径，还要考虑：文件不存在、服务未启动、依赖缺失、权限不足等可能使命令静默失败的情况。
 >
 > 直接输出 JSON 结果，不要额外解释。
 
@@ -211,7 +235,13 @@ docs/features/<feature-name>/tasks/
 - <文件路径 2>
 
 ## 验证方式
-<如何验证此任务完成>
+
+<!-- 合约：feature-implement 逐条执行以下命令，退出码 0=通过，非0=失败。不得自行添加或修改命令。 -->
+
+```bash
+<验证命令 1>
+<验证命令 2>
+```
 ```
 
 任务索引文件 `README.md` 格式：
@@ -237,35 +267,169 @@ docs/features/<feature-name>/tasks/
 #!/bin/bash
 # 功能验证脚本 - <feature-name>
 # 用法: bash docs/features/<feature-name>/verify.sh
+#
+# 设计原则：
+# 1. 不使用 set -e（需要运行全部验证步骤并汇总结果）
+# 2. 每条验证的退出码 0=通过，非0=失败
+# 3. 由 generate_tasks.py 根据 Plan subagent 的 verification 字段自动生成
 
-set -e
+set -o pipefail
 
 PASS=0
 FAIL=0
 
-check() {
+# run_and_check: 运行命令，根据退出码判定通过/失败
+# 用法: run_and_check "描述" command arg1 arg2 ...
+run_and_check() {
     local desc="$1"
-    if [ $? -eq 0 ]; then
+    shift
+    local output
+    output=$("$@" 2>&1)
+    local code=$?
+    if [ "$code" -eq 0 ]; then
         echo "✅ PASS: $desc"
         PASS=$((PASS + 1))
     else
-        echo "❌ FAIL: $desc"
+        echo "❌ FAIL: $desc (exit=$code)"
+        echo "   $output" | head -5
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+# check_eq: 比较实际值与期望值
+# 用法: check_eq "描述" "期望值" "实际值"
+check_eq() {
+    local desc="$1"
+    local expected="$2"
+    local actual="$3"
+    if [ "$actual" = "$expected" ]; then
+        echo "✅ PASS: $desc"
+        PASS=$((PASS + 1))
+    else
+        echo "❌ FAIL: $desc (expected '$expected', got '$actual')"
         FAIL=$((FAIL + 1))
     fi
 }
 
 echo "===== <功能名> 验证开始 ====="
+echo ""
 
-# 验证 1: <具体检查项>
-# check "项目构建通过"
-# ...
+# ==================== 任务级验证 ====================
+# 以下由 generate_tasks.py 根据 Plan subagent 的 verification 字段自动生成
 
-# 验证 N: <具体检查项>
+# --- 任务 01: <标题> ---
+# (if-block 验证命令)
 
+echo ""
 echo "===== <功能名> 验证结束 ====="
 echo "通过: $PASS, 失败: $FAIL"
 [ $FAIL -eq 0 ] || exit 1
 ```
+
+---
+
+## 📐 验证设计指南
+
+本章节规范了如何为任务设计可靠、可自动执行的验证命令。Plan subagent 在设计每个任务的 `verification` 字段时必须遵循本指南。
+
+### 黄金法则
+
+1. **退出码即判定** — 每条验证命令必须产生明确的退出码。0 = 通过，非 0 = 失败。feature-implement 不解读命令输出，只检查退出码。
+2. **全自动执行** — 不存在"手动检查"、"查看浏览器"、"阅读日志并判断"等人工步骤。
+3. **真实命令 alias** — Symfony bundle 的 config extension alias 必须来自 `bin/console debug:config --list` 的实际输出。绝不猜测或编造 alias。例如 `framework.validation` 不是独立 alias，validator 配置在 `framework` 下。
+4. **set -e 安全** — 所有验证命令在 `set -e` 环境中执行。任一命令失败即中止后续命令。命令必须幂等且不产生副作用。
+5. **边界覆盖** — 验证命令不仅覆盖正常路径，也覆盖可自动检测的边界情况（文件缺失、语法错误、schema 不一致等）。
+
+### 按任务类型的验证模式
+
+#### 安装依赖（install）
+```bash
+cd app/demo-backend-api
+HTTP_PROXY=http://127.0.0.1:6244 HTTPS_PROXY=http://127.0.0.1:6244 composer show symfony/validator --quiet
+```
+
+#### 配置组件（config）
+```bash
+cd app/demo-backend-api
+# ✅ 使用 debug:config 检查扩展配置（alias 必须真实存在）
+php bin/console debug:config doctrine
+# ✅ 验证 framework 下的 validation 配置
+php bin/console debug:config framework
+# ✅ 验证 schema 一致性
+php bin/console doctrine:schema:validate
+
+# ❌ 反模式：猜测不存在的 alias
+# php bin/console debug:config framework.validation  # 这会报错！不是独立 extension
+```
+
+#### 数据库（database）
+```bash
+cd app/demo-backend-api
+php bin/console doctrine:database:create
+php bin/console doctrine:schema:create --dump-sql
+```
+
+#### 实体类（entity）
+```bash
+cd app/demo-backend-api
+php -l src/Entity/SomeEntity.php                          # 语法检查
+php bin/console doctrine:schema:validate                   # Schema 验证
+grep -q '#\[ORM\\Entity' src/Entity/SomeEntity.php         # 属性检查
+```
+
+#### 服务类（service）
+```bash
+cd app/demo-backend-api
+php -l src/Service/SomeService.php
+php bin/phpunit --filter=SomeServiceTest
+```
+
+#### 控制器（controller）
+```bash
+cd app/demo-backend-api
+php -l src/Controller/SomeController.php
+php bin/console debug:router | grep -q "api/endpoint_name"  # 路由注册验证
+php bin/phpunit --filter=SomeControllerTest                 # 集成测试
+```
+
+#### 测试（tests）
+```bash
+cd app/demo-backend-api
+php bin/phpunit --filter=SpecificTestName
+```
+
+#### 质量检查（QA）
+```bash
+cd app/demo-backend-api
+vendor/bin/php-cs-fixer fix --allow-unsupported-php-version true --dry-run
+vendor/bin/phpstan analyze
+php bin/phpunit
+```
+
+### 反模式清单
+
+| 反模式 | 错误示例 | 问题 |
+|--------|----------|------|
+| 猜测 bundle alias | `debug:config framework.validation` | `framework.validation` 不是注册的 config extension；应直接用 `framework` |
+| 手动步骤 | `# 手动 curl 测试各端点` 或 `请参见 verify.sh` | 无自动化，无退出码，feature-implement 无法判定 |
+| 依赖调试输出格式 | `debug:config X \| grep -A6 validation` | 调试输出格式不稳定，且管道可能隐藏退出码 |
+| 无退出码的判据 | `local desc="$1"; if [ $? -eq 0 ]` | `local` 总是返回 0，`$?` 检测的是 `local` 而非验证命令 |
+| 缺少 pipefail | `command \| grep -q pattern`（未设置 `set -o pipefail`） | command 失败时的退出码被 grep 覆盖 |
+| 纯 echo 无判据 | `echo "请检查输出是否正确"` | 无判定逻辑，退出码总是 0 |
+| 环境假设 | 假设 localhost:8000 始终可用 | 端口可能被占用，服务可能未启动，静默失败 |
+
+### 退出码的硬性约定
+
+- `0` = 验证通过
+- 任何非 0 = 验证失败
+- 使用临时脚本时 `set -e` 确保任一命令失败即中止
+- `set -o pipefail` 确保管道中任一命令失败则整体失败
+- `grep -q` 匹配到返回 0，未匹配到返回 1
+- `php bin/phpunit` 任意测试失败即返回非 0
+- `vendor/bin/php-cs-fixer fix --dry-run` 需要修复时返回非 0
+- `vendor/bin/phpstan analyze` 有任何错误即返回非 0
+
+---
 
 ### Step 8: 总结交付
 
@@ -277,6 +441,7 @@ echo "通过: $PASS, 失败: $FAIL"
 > - 📄 **需求说明书**：`docs/features/<feature-name>/REQUIREMENT.md`
 > - 📂 **任务拆解**：`docs/features/<feature-name>/tasks/`（共 N 个任务）
 > - 🔍 **验证脚本**：`docs/features/<feature-name>/verify.sh`
+> - 🛡️ **验证合约**：每个任务的验证命令已内嵌在任务文件中，feature-implement 可直接执行，无需自行设计验证
 >
 > 你随时可以：
 > - 修改 `REQUIREMENT.md` 调整需求
@@ -295,6 +460,7 @@ echo "通过: $PASS, 失败: $FAIL"
 3. **不过度设计** — 用户没提到的需求不要脑补，但可以问
 4. **可落地优先** — 每个任务都必须有明确的验收标准
 5. **验证先行** — 在写实现代码之前就定义如何验证
+6. **验证内嵌** — 每个任务的验证方式必须是可执行的 bash 命令，不是自然语言描述或 TODO 占位符
 
 ---
 

@@ -13,7 +13,8 @@ Input JSON format (from Plan subagent):
         "description": "Initialize npm project and install dependencies",
         "acceptance_criteria": ["npm install succeeds", "project builds"],
         "files": ["package.json", "tsconfig.json"],
-        "depends_on": []
+        "depends_on": [],
+        "verification": ["npm install", "npm run build"]
     },
     ...
 ]
@@ -23,6 +24,21 @@ import json
 import os
 import sys
 from pathlib import Path
+
+
+def _verification_section(task):
+    """Generate verification section for a task markdown file."""
+    verification_cmds = task.get("verification", [])
+    if not verification_cmds:
+        return '⚠️ **未定义验证命令** — 请在实现前补充可执行的验证命令。\n'
+
+    lines = [
+        '<!-- 合约：feature-implement 逐条执行以下命令，退出码 0=通过，非0=失败。不得自行添加或修改命令。 -->\n',
+        '```bash',
+    ]
+    lines.extend(verification_cmds)
+    lines.append('```\n')
+    return '\n'.join(lines)
 
 
 def main():
@@ -67,7 +83,7 @@ def main():
 
 ## 验证方式
 
-请参见 `verify.sh` 中对应的验证步骤。
+{_verification_section(task)}
 """
 
         file_path = tasks_dir / f"{slug}.md"
@@ -93,33 +109,78 @@ def main():
         "#!/bin/bash",
         f"# 功能验证脚本 - {feature_name}",
         f"# 用法: bash docs/features/{feature_name}/verify.sh",
+        "#",
+        "# 设计原则：",
+        "# 1. 不使用 set -e（需运行全部验证步骤并汇总结果）",
+        "# 2. 每条验证的退出码 0=通过，非0=失败",
+        "# 3. 由 generate_tasks.py 根据 Plan subagent 的 verification 字段自动生成",
         "",
-        "set -e",
+        "set -o pipefail",
         "",
         "PASS=0",
         "FAIL=0",
         "",
-        "check() {",
+        "run_and_check() {",
         '    local desc="$1"',
-        "    if [ $? -eq 0 ]; then",
-        '        echo "  ✅ PASS: $desc"',
+        "    shift",
+        "    local output",
+        '    output=$("$@" 2>&1)',
+        "    local code=$?",
+        '    if [ "$code" -eq 0 ]; then',
+        '        echo "✅ PASS: $desc"',
         "        PASS=$((PASS + 1))",
         "    else",
-        '        echo "  ❌ FAIL: $desc"',
+        '        echo "❌ FAIL: $desc (exit=$code)"',
+        '        echo "   $output" | head -5',
+        "        FAIL=$((FAIL + 1))",
+        "    fi",
+        "}",
+        "",
+        "check_eq() {",
+        '    local desc="$1"',
+        '    local expected="$2"',
+        '    local actual="$3"',
+        '    if [ "$actual" = "$expected" ]; then',
+        '        echo "✅ PASS: $desc"',
+        "        PASS=$((PASS + 1))",
+        "    else",
+        '        echo "❌ FAIL: $desc (expected \'$expected\', got \'$actual\')"',
         "        FAIL=$((FAIL + 1))",
         "    fi",
         "}",
         "",
         f'echo "===== {feature_name} 验证开始 ====="',
+        'echo ""',
+        "",
+        "# ==================== 任务级验证 ====================",
         "",
     ]
+
     for task in tasks:
-        verify_lines.append(f"# {task['title']}")
-        verify_lines.append(f"# TODO: add verification for {task['title']}")
+        tid = task["id"]
+        title = task["title"]
+        verification_cmds = task.get("verification", [])
+
+        verify_lines.append(f'echo "--- 任务 {tid}: {title} ---"')
+
+        if verification_cmds:
+            for cmd in verification_cmds:
+                # Escape single quotes in the command for bash
+                escaped = cmd.replace("'", "'\\''")
+                verify_lines.append(f"if {cmd} 2>&1; then")
+                verify_lines.append(f"    echo '  ✅ PASS: {escaped}'")
+                verify_lines.append("    PASS=$((PASS + 1))")
+                verify_lines.append("else")
+                verify_lines.append(f"    echo '  ❌ FAIL: {escaped}'")
+                verify_lines.append("    FAIL=$((FAIL + 1))")
+                verify_lines.append("fi")
+        else:
+            verify_lines.append(f"echo '  ⚠️  未定义验证命令'")
+
         verify_lines.append("")
 
     verify_lines.extend([
-        "",
+        'echo ""',
         f'echo "===== {feature_name} 验证结束 ====="',
         'echo "通过: $PASS, 失败: $FAIL"',
         "[ $FAIL -eq 0 ] || exit 1",

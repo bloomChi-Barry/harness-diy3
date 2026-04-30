@@ -1,0 +1,9 @@
+nelmio_api_doc:
+    documentation:
+        info:
+            title: Product Category API
+            description: RESTful API for managing product categories with tree structure
+            version: 1.0.0
+    areas:
+        path_patterns:
+            - ^/api(?!/doc$)
