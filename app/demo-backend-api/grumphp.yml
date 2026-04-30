@@ -1,0 +1,11 @@
+grumphp:
+    hooks_dir: ~
+    hooks_preset: local
+    tasks:
+        phpcsfixer:
+            config: .php-cs-fixer.dist.php
+        phpstan:
+            configuration: phpstan.neon
+    parallel:
+        enabled: true
+    process_timeout: 60
