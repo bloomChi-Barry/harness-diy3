@@ -22,6 +22,13 @@
 ## 验证方式
 ```bash
 cd app/demo-backend-api
+
+# 1. Doctrine DB 连通性
 php bin/console doctrine:database:create
+
+# 2. Doctrine 配置确认
 php bin/console debug:config doctrine
+
+# 3. Validator 配置确认（嵌套在 framework 下，需 grep framework 输出）
+php bin/console debug:config framework | grep -A6 validation
 ```
