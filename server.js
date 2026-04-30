@@ -21,3 +21,21 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
 });
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Error: Port ${err.port} is already in use.`);
+  } else {
+    console.error(`Error: ${err.message}`);
+  }
+  process.exit(1);
+});
+
+function shutdown() {
+  server.close(() => {
+    process.exit(0);
+  });
+}
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
