@@ -1,11 +1,11 @@
 # 商品分类 API - 任务拆解
 
-总任务数: 11 | 已完成: 1 | 进度: 9%
+总任务数: 11 | 已完成: 2 | 进度: 18%
 
 | # | 任务 | 状态 | 依赖 | 证据 |
 |---|------|------|------|------|
 | 01 | Install project dependencies | ✅ completed | - | [查看](artifacts/01-install-dependencies.log) |
-| 02 | Configure Doctrine ORM with SQLite and Validator | ⏳ pending | 01 | - |
+| 02 | Configure Doctrine ORM with SQLite and Validator | ✅ completed | 01 | [查看](artifacts/02-configure-doctrine.log) |
 | 03 | Create Category Entity | ⏳ pending | 02 | - |
 | 04 | Create domain exceptions and DTOs | ⏳ pending | 03 | - |
 | 05 | Create CategoryService | ⏳ pending | 04 | - |
