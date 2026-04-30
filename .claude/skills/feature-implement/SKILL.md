@@ -203,10 +203,19 @@ You MUST complete these steps in order:
 
 1. 确保产物目录存在：`mkdir -p docs/features/<feature-name>/tasks/artifacts`
 2. 从任务文件中的「验证方式」区域提取 bash 命令
-3. 将验证命令输出**同时**打印到终端并写入产物文件：
+3. **只执行任务定义中列出的命令**，不自行添加额外验证步骤——额外步骤未经审核，可能用错命令产生误导
+4. **逐条检查退出码**：将命令写入临时脚本，`set -e` 开头，每条命令前加 `echo` 分隔符标识步骤；任一条命令失败（非零退出码）即整体失败
+5. 将验证命令输出**同时**打印到终端并写入产物文件：
 
 ```bash
-<验证命令> 2>&1 | tee docs/features/<feature-name>/tasks/artifacts/<NN>-<task-name>.log
+# 将任务验证命令写入临时脚本（set -e 确保任一步失败即中止）
+cat > /tmp/verify-task-<NN>.sh << 'VERIFY_EOF'
+#!/bin/bash
+set -e
+# ... 任务「验证方式」中的命令，每条前加 echo 分隔符 ...
+VERIFY_EOF
+bash /tmp/verify-task-<NN>.sh 2>&1 | tee docs/features/<feature-name>/tasks/artifacts/<NN>-<task-name>.log
+VERIFY_EXIT=$?
 ```
 
 产物文件头部需包含元信息（在运行前写入）：
@@ -214,12 +223,14 @@ You MUST complete these steps in order:
 ```bash
 ARTIFACT="docs/features/<feature-name>/tasks/artifacts/<NN>-<task-name>.log"
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
-printf "# 任务 <NN>: <任务标题>\n# 验证时间: %s\n# 结果: " "$TIMESTAMP" > "$ARTIFACT"
+printf "# 任务 <NN>: <任务标题>\n# 验证时间: %s\n" "$TIMESTAMP" > "$ARTIFACT"
 ```
 
-验证结果分为：
-- ✅ 全部通过 → 在产物文件末尾追加 `✅ PASSED` 标记，进入步骤 3g
-- ❌ 有失败 → 在产物文件末尾追加 `❌ FAILED` 标记，进入步骤 3f 修复循环
+验证结果判断（基于 `$VERIFY_EXIT` 退出码，**不是**人工读日志判断）：
+- `VERIFY_EXIT` = 0 → 在产物文件末尾追加 `✅ PASSED` 标记，进入步骤 3g
+- `VERIFY_EXIT` ≠ 0 → 在产物文件末尾追加 `❌ FAILED (exit=$VERIFY_EXIT)` 标记，进入步骤 3f 修复循环
+
+**硬性规则**：日志中如有明显的 `[critical]`、`Error thrown`、`exception`、`stack trace` 等字样，即使退出码意外为 0 也视为失败。禁止用"功能实际可工作"为由跳过验证失败。
 
 #### 3f. 修复循环（最多 3 轮）
 
@@ -328,6 +339,8 @@ EOF
 - 跳过验证直接标记任务完成
 - 验证后不将输出持久化到 `artifacts/` 目录
 - 在验证失败时忽略错误继续下一个任务
+- 自行在任务定义的「验证方式」之外添加额外验证步骤
+- 验证日志中有明显 `[critical]`/`Error`/`exception` 时仍标记通过
 - 修改或删除 feature-analyzer 产出的原计划任务行（任务可拆分可追加，但原编号和条目不可变）
 - 同时实现多个任务（任务必须按依赖顺序逐一完成）
 - 修改任务文件中的验收标准以适应实现

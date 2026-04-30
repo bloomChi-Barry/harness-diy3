@@ -1,6 +1,6 @@
 # 商品分类 API - 任务拆解
 
-总任务数: 11 | 已完成: 4 | 进度: 36%
+总任务数: 11 | 已完成: 5 | 进度: 45%
 
 | # | 任务 | 状态 | 依赖 | 证据 |
 |---|------|------|------|------|
@@ -8,7 +8,7 @@
 | 02 | Configure Doctrine ORM with SQLite and Validator | ✅ completed | 01 | [查看](artifacts/02-configure-doctrine.log) |
 | 03 | Create Category Entity | ✅ completed | 02 | [查看](artifacts/03-create-entity.log) |
 | 04 | Create domain exceptions and DTOs | ✅ completed | 03 | [查看](artifacts/04-exceptions-dtos.log) |
-| 05 | Create CategoryService | ⏳ pending | 04 | - |
+| 05 | Create CategoryService | ✅ completed | 04 | [查看](artifacts/05-category-service.log) |
 | 06 | Create exception event listener | ⏳ pending | 04 | - |
 | 07 | Create CategoryController (all 7 endpoints) | ⏳ pending | 05, 06 | - |
 | 08 | Configure API documentation (NelmioApiDoc + Swagger) | ⏳ pending | 07 | - |
