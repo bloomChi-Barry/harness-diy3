@@ -1,6 +1,6 @@
 # 商品分类 API - 任务拆解
 
-总任务数: 11 | 已完成: 8 | 进度: 73%
+总任务数: 11 | 已完成: 9 | 进度: 82%
 
 | # | 任务 | 状态 | 依赖 | 证据 |
 |---|------|------|------|------|
@@ -12,7 +12,7 @@
 | 06 | Create exception event listener | ✅ completed | 04 | [查看](artifacts/06-exception-listener.log) |
 | 07 | Create CategoryController (all 7 endpoints) | ✅ completed | 05, 06 | [查看](artifacts/07-category-controller.log) |
 | 08 | Configure API documentation (NelmioApiDoc + Swagger) | ✅ completed | 07 | [查看](artifacts/08-configure-api-docs.log) |
-| 09 | Set up PHPUnit test infrastructure and CategoryService unit tests | ⏳ pending | 05 | - |
+| 09 | Set up PHPUnit test infrastructure and CategoryService unit tests | ✅ completed | 05 | [查看](artifacts/09-service-unit-tests.log) |
 | 10 | Create PHPUnit controller integration tests (WebTestCase) | ⏳ pending | 07, 09 | - |
 | 11 | Create verify.sh verification script and run QA checks | ⏳ pending | 08, 10 | - |
 

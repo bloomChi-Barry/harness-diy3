@@ -6,6 +6,8 @@ grumphp:
             config: .php-cs-fixer.dist.php
         phpstan:
             configuration: phpstan.neon
+            ignore_patterns:
+                - tests/
     parallel:
         enabled: true
     process_timeout: 60
