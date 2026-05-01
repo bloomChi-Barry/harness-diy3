@@ -4,6 +4,27 @@
 
 ---
 
+## [2026-05-01] refactor(skills-workflow-improvement): 工作流工具链四项定向改进
+
+**类型**: 流程改进
+**范围**: `.claude/skills/*` / `CLAUDE.md` / `.claude/knowledge/`（新）
+**提交**: `a4e3bdc`
+
+**摘要**: 基于对当前工作流的系统评价，实施了四项定向改进：消除 CLAUDE.md 与实际技术栈的不一致；简化 feature-analyzer 的 Plan→JSON→Python 生成链为 Plan→Markdown 直接输出；在 feature-implement 中引入验证命令三级修正协议替代僵化的"合约不可变"规则；创建跨技能知识库实现技能间经验反馈。
+
+**动机**: 工作流评审发现四个结构性缺陷——(1) CLAUDE.md 声称"无 Doctrine"但实际使用 Doctrine ORM，导致所有 skill 读取错误上下文；(2) feature-analyzer 的任务生成链（Plan subagent → JSON → Python 脚本）有三个故障点且难以调试；(3) 验证命令作为"不可变合约"的理念导致僵局——当 analyzer 写错路径或 alias 时 implement 被卡住；(4) 五个 skill 各自孤立运行，feature-implement 发现的验证坑不会反馈给 feature-analyzer。
+
+**关键决策**:
+- 文档同步采用"描述实际状态"原则，不保留历史模板痕迹 — 避免漂移复现
+- Plan subagent 输出 fenced code blocks 而非 JSON — Claude Code 原生支持 Markdown 解析，无需中间格式
+- 三级分类替代一刀切"禁止修改" — 反模式仍需暂停（L1），事实性错误允许带审计追踪的修正（L2），逻辑差异备注后继续（L3），平衡了合约严肃性与实用性
+- 知识库使用简单 Markdown 文件而非数据库或结构化 schema — 最小化维护成本，Claude Code 可直接读取
+- 知识库种子条目从项目实际历史中提取 — 空知识库无法产生正反馈循环
+
+**产物**: 无独立 docs 目录（本迭代是对工具链本身的改进，产物为上述文件变更）
+
+---
+
 ## [2026-05-01] feat: 完成整个工具链
 
 **类型**: 功能增强
