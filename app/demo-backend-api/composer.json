@@ -59,6 +59,7 @@
         "symfony/polyfill-php82": "*"
     },
     "scripts": {
+        "sync-apifox": "bash bin/sync-apifox.sh",
         "auto-scripts": {
             "cache:clear": "symfony-cmd",
             "assets:install %PUBLIC_DIR%": "symfony-cmd"
