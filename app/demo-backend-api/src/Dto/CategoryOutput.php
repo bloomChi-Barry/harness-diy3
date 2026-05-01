@@ -39,6 +39,26 @@ readonly class CategoryOutput
         return new self($data);
     }
 
+    public static function fromEntityWithoutChildren(Category $category): self
+    {
+        $data = [
+            'id' => $category->getId(),
+            'name' => $category->getName(),
+            'parent_id' => $category->getParent()?->getId(),
+            'sort_order' => $category->getSortOrder(),
+            'icon' => $category->getIcon(),
+            'seo_title' => $category->getSeoTitle(),
+            'seo_description' => $category->getSeoDescription(),
+            'seo_keywords' => $category->getSeoKeywords(),
+            'is_enabled' => $category->isEnabled(),
+            'created_at' => $category->getCreatedAt()?->format(\DateTimeInterface::ATOM),
+            'updated_at' => $category->getUpdatedAt()?->format(\DateTimeInterface::ATOM),
+            'children' => [],
+        ];
+
+        return new self($data);
+    }
+
     public static function fromEntityShallow(Category $category): self
     {
         $children = $category->getChildren()->map(

@@ -1,0 +1,14 @@
+# 重构验证: service-db-to-repository
+# 验证时间: 2026-05-01 13:51:46
+
+Xdebug: [Step Debug] Could not connect to debugging client. Tried: 127.0.0.1:9003 (through xdebug.client_host/xdebug.client_port).
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.2.28
+Configuration: /Users/barry/code/harness-diy3/app/demo-backend-api/phpunit.dist.xml
+
+.......................................                           39 / 39 (100%)
+
+Time: 00:00.277, Memory: 28.00 MB
+
+OK (39 tests, 120 assertions)

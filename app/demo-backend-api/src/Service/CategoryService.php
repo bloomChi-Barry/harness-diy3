@@ -10,12 +10,12 @@ use App\Entity\Category;
 use App\Exception\CategoryHasChildrenException;
 use App\Exception\CategoryNotFoundException;
 use App\Exception\CircularReferenceException;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Repository\CategoryRepositoryInterface;
 
 class CategoryService
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly CategoryRepositoryInterface $repository,
     ) {
     }
 
@@ -24,10 +24,15 @@ class CategoryService
      */
     public function getTree(bool $enabledOnly = false): array
     {
-        $repository = $this->entityManager->getRepository(Category::class);
-        $categories = $repository->findBy([], ['sortOrder' => 'ASC', 'id' => 'ASC']);
+        $categories = $this->repository->findAllOrdered();
 
-        return $this->buildTree($categories, $enabledOnly);
+        $childrenMap = [];
+        foreach ($categories as $category) {
+            $parentId = $category->getParent()?->getId() ?? 0;
+            $childrenMap[$parentId][] = $category;
+        }
+
+        return $this->buildTreeFromMap(0, $childrenMap, $enabledOnly);
     }
 
     /**
@@ -72,8 +77,7 @@ class CategoryService
             $category->setIsEnabled($input->isEnabled);
         }
 
-        $this->entityManager->persist($category);
-        $this->entityManager->flush();
+        $this->repository->save($category);
 
         return $category;
     }
@@ -92,7 +96,6 @@ class CategoryService
             $category->setName($input->name);
         }
         if ($input->sortOrder !== $category->getSortOrder()) {
-            // sortOrder is always set (default 0), only update if changed
             $category->setSortOrder($input->sortOrder);
         }
         if (null !== $input->icon) {
@@ -111,7 +114,7 @@ class CategoryService
             $category->setIsEnabled($input->isEnabled);
         }
 
-        $this->entityManager->flush();
+        $this->repository->save($category);
 
         return $category;
     }
@@ -124,15 +127,14 @@ class CategoryService
             throw new CategoryHasChildrenException();
         }
 
-        $this->entityManager->remove($category);
-        $this->entityManager->flush();
+        $this->repository->remove($category);
     }
 
     public function toggle(int $id, bool $isEnabled): Category
     {
         $category = $this->findCategory($id);
         $category->setIsEnabled($isEnabled);
-        $this->entityManager->flush();
+        $this->repository->save($category);
 
         return $category;
     }
@@ -150,14 +152,14 @@ class CategoryService
         }
 
         $category->setSortOrder($sortOrder);
-        $this->entityManager->flush();
+        $this->repository->save($category);
 
         return $category;
     }
 
     private function findCategory(int $id): Category
     {
-        $category = $this->entityManager->getRepository(Category::class)->find($id);
+        $category = $this->repository->findById($id);
         if (null === $category) {
             throw new CategoryNotFoundException();
         }
@@ -182,56 +184,34 @@ class CategoryService
      */
     private function getAncestorIds(int $categoryId): array
     {
-        $ancestorIds = [];
-        $repository = $this->entityManager->getRepository(Category::class);
-        $category = $repository->find($categoryId);
-
-        while (null !== $category && null !== $category->getParent()) {
-            $parent = $category->getParent();
-            $ancestorIds[] = $parent->getId();
-            $category = $parent;
-        }
-
-        return $ancestorIds;
+        return $this->repository->findAncestorIds($categoryId);
     }
 
     /**
-     * @param Category[] $categories
+     * @param array<int, Category[]> $childrenMap
      *
      * @return array<int, array<string, mixed>>
      */
-    private function buildTree(array $categories, bool $enabledOnly): array
+    private function buildTreeFromMap(int $parentId, array $childrenMap, bool $enabledOnly): array
     {
         $tree = [];
+        $children = $childrenMap[$parentId] ?? [];
 
-        foreach ($categories as $category) {
-            if (null === $category->getParent()) {
-                if ($enabledOnly && !$category->isEnabled()) {
-                    continue;
-                }
-                $tree[] = $this->buildNode($category, $enabledOnly);
+        foreach ($children as $category) {
+            if ($enabledOnly && !$category->isEnabled()) {
+                continue;
             }
+
+            $output = CategoryOutput::fromEntityWithoutChildren($category)->toArray();
+            $output['children'] = $this->buildTreeFromMap(
+                $category->getId(),
+                $childrenMap,
+                $enabledOnly
+            );
+
+            $tree[] = $output;
         }
 
         return $tree;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function buildNode(Category $category, bool $enabledOnly): array
-    {
-        $output = CategoryOutput::fromEntity($category)->toArray();
-
-        $children = [];
-        foreach ($category->getChildren() as $child) {
-            if ($enabledOnly && !$child->isEnabled()) {
-                continue;
-            }
-            $children[] = $this->buildNode($child, $enabledOnly);
-        }
-        $output['children'] = $children;
-
-        return $output;
     }
 }

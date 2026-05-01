@@ -1,0 +1,17 @@
+# 重构前后指标对比: service-db-to-repository
+
+| 指标 | 重构前 | 重构后 | 变化 |
+|------|--------|--------|------|
+| `CategoryService` 行数 | 237 | 217 | -20 (-8.4%) |
+| Service 直接 EM 访问点 | 9 处 | 0 处 | -9 (-100%) |
+| Service 依赖的 Doctrine 类 | 1 (`EntityManagerInterface`) | 0 | -1 |
+| `src/Repository/` 文件数 | 0 | 2 | +2 |
+| Repository Interface 方法数 | 0 | 5 | +5 |
+| `getAncestorIds()` 查询数 (depth=3) | 4 次 (1 find + 3 lazy-load) | 1 次 (单条 DQL) | -75% |
+| `buildTree()` 查询数 (10 nodes) | 11 次 (1 findBy + 10 lazy-load) | 1 次 (adjacency map) | -91% |
+| 单元测试 Mock 对象数 | 2 (`EntityManagerInterface` + `EntityRepository`) | 1 (`CategoryRepositoryInterface`) | -1 |
+| Controller 改动 | N/A | 0 | 无 |
+| Service 公共 API 改动 | N/A | 0 | 无 |
+| 全量测试 | 39 tests / 120 assertions | 39 tests / 120 assertions | 不变 |
+| PHPStan errors | 0 | 0 | 不变 |
+| CS Fixer errors | 0 | 0 | 不变 |

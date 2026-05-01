@@ -9,28 +9,19 @@ use App\Entity\Category;
 use App\Exception\CategoryHasChildrenException;
 use App\Exception\CategoryNotFoundException;
 use App\Exception\CircularReferenceException;
+use App\Repository\CategoryRepositoryInterface;
 use App\Service\CategoryService;
-use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\EntityRepository;
 use PHPUnit\Framework\TestCase;
 
 class CategoryServiceTest extends TestCase
 {
-    private EntityManagerInterface $em;
-    /** @var EntityRepository<Category> */
-    private EntityRepository $repo;
+    private CategoryRepositoryInterface $repository;
     private CategoryService $service;
 
     protected function setUp(): void
     {
-        $this->em = $this->createMock(EntityManagerInterface::class);
-        $this->repo = $this->createMock(EntityRepository::class);
-
-        $this->em->method('getRepository')
-            ->with(Category::class)
-            ->willReturn($this->repo);
-
-        $this->service = new CategoryService($this->em);
+        $this->repository = $this->createMock(CategoryRepositoryInterface::class);
+        $this->service = new CategoryService($this->repository);
     }
 
     // ── Helpers ──────────────────────────────────────────────────
@@ -62,18 +53,22 @@ class CategoryServiceTest extends TestCase
         $this->addChild($root, $child);
         $this->addChild($child, $grandchild);
 
-        $this->repo->method('findBy')
-            ->with([], ['sortOrder' => 'ASC', 'id' => 'ASC'])
+        $this->repository->method('findAllOrdered')
             ->willReturn([$root, $child, $grandchild]);
 
         $tree = $this->service->getTree();
 
         $this->assertCount(1, $tree);
         $this->assertSame('Electronics', $tree[0]['name']);
+        $this->assertNull($tree[0]['parent_id']);
+        $this->assertTrue($tree[0]['is_enabled']);
+        $this->assertIsArray($tree[0]['children']);
         $this->assertCount(1, $tree[0]['children']);
         $this->assertSame('Phones', $tree[0]['children'][0]['name']);
+        $this->assertSame(1, $tree[0]['children'][0]['parent_id']);
         $this->assertCount(1, $tree[0]['children'][0]['children']);
         $this->assertSame('iPhone', $tree[0]['children'][0]['children'][0]['name']);
+        $this->assertSame(2, $tree[0]['children'][0]['children'][0]['parent_id']);
     }
 
     public function testGetTreeEnabledOnlyFiltersDisabled(): void
@@ -82,14 +77,15 @@ class CategoryServiceTest extends TestCase
         $disabled = $this->createCategory('Disabled', 2);
         $disabled->setIsEnabled(false);
 
-        $this->repo->method('findBy')
-            ->with([], ['sortOrder' => 'ASC', 'id' => 'ASC'])
+        $this->repository->method('findAllOrdered')
             ->willReturn([$enabled, $disabled]);
 
         $tree = $this->service->getTree(enabledOnly: true);
 
         $this->assertCount(1, $tree);
         $this->assertSame('Enabled', $tree[0]['name']);
+        $this->assertTrue($tree[0]['is_enabled']);
+        $this->assertEmpty($tree[0]['children']);
     }
 
     public function testGetTreeEnabledOnlyFiltersDisabledChildren(): void
@@ -101,15 +97,17 @@ class CategoryServiceTest extends TestCase
         $this->addChild($root, $enabledChild);
         $this->addChild($root, $disabledChild);
 
-        $this->repo->method('findBy')
-            ->with([], ['sortOrder' => 'ASC', 'id' => 'ASC'])
+        $this->repository->method('findAllOrdered')
             ->willReturn([$root, $enabledChild, $disabledChild]);
 
         $tree = $this->service->getTree(enabledOnly: true);
 
         $this->assertCount(1, $tree);
+        $this->assertSame('Root', $tree[0]['name']);
+        $this->assertNull($tree[0]['parent_id']);
         $this->assertCount(1, $tree[0]['children']);
         $this->assertSame('Visible', $tree[0]['children'][0]['name']);
+        $this->assertTrue($tree[0]['children'][0]['is_enabled']);
     }
 
     // ── getById ──────────────────────────────────────────────────
@@ -120,20 +118,23 @@ class CategoryServiceTest extends TestCase
         $child = $this->createCategory('Child', 2);
         $this->addChild($parent, $child);
 
-        $this->repo->method('find')
+        $this->repository->method('findById')
             ->with(1)
             ->willReturn($parent);
 
         $result = $this->service->getById(1);
 
         $this->assertSame('Parent', $result['name']);
+        $this->assertSame(1, $result['id']);
+        $this->assertNull($result['parent_id']);
         $this->assertCount(1, $result['children']);
         $this->assertSame('Child', $result['children'][0]['name']);
+        $this->assertSame(2, $result['children'][0]['id']);
     }
 
     public function testGetByIdThrowsNotFoundException(): void
     {
-        $this->repo->method('find')->with(99)->willReturn(null);
+        $this->repository->method('findById')->with(99)->willReturn(null);
 
         $this->expectException(CategoryNotFoundException::class);
         $this->service->getById(99);
@@ -145,28 +146,31 @@ class CategoryServiceTest extends TestCase
     {
         $input = new CategoryInput(name: 'New Category', sortOrder: 5);
 
-        $this->em->expects($this->once())->method('persist')
+        $this->repository->expects($this->once())->method('save')
             ->with($this->callback(function (Category $c) {
                 return 'New Category' === $c->getName() && 5 === $c->getSortOrder();
             }));
-        $this->em->expects($this->once())->method('flush');
 
         $result = $this->service->create($input);
 
         $this->assertSame('New Category', $result->getName());
         $this->assertSame(5, $result->getSortOrder());
+        $this->assertTrue($result->isEnabled());
+        $this->assertNull($result->getParent());
     }
 
     public function testCreateWithParentId(): void
     {
         $parent = $this->createCategory('Parent', 1);
-        $this->repo->method('find')->with(1)->willReturn($parent);
+        $this->repository->method('findById')->with(1)->willReturn($parent);
 
         $input = new CategoryInput(name: 'Child', parentId: 1);
 
         $result = $this->service->create($input);
 
         $this->assertSame($parent, $result->getParent());
+        $this->assertSame('Child', $result->getName());
+        $this->assertSame(0, $result->getSortOrder());
     }
 
     public function testCreateWithEmptyNameThrowsException(): void
@@ -192,30 +196,32 @@ class CategoryServiceTest extends TestCase
     {
         $category = $this->createCategory('Old Name', 1);
         $category->setSortOrder(10);
-        $this->repo->method('find')->with(1)->willReturn($category);
+        $this->repository->method('findById')->with(1)->willReturn($category);
 
         $input = new CategoryInput(name: 'New Name', sortOrder: 20);
         $result = $this->service->update(1, $input);
 
         $this->assertSame('New Name', $result->getName());
         $this->assertSame(20, $result->getSortOrder());
+        $this->assertSame(1, $result->getId());
     }
 
     public function testUpdateCircularReferenceThrowsException(): void
     {
-        // Category 1 is parent of Category 3. Category 2 is child of Category 3.
-        // Attempting to set Category 1's parent to 2 makes 1 a child of its own descendant.
         $root = $this->createCategory('Root', 1);
         $child = $this->createCategory('Child', 3);
         $grandchild = $this->createCategory('Grandchild', 2);
         $this->addChild($root, $child);
         $this->addChild($child, $grandchild);
 
-        $this->repo->method('find')
+        $this->repository->method('findById')
             ->willReturnMap([
-                [1, null, null, $root],
-                [2, null, null, $grandchild],
+                [1, $root],
+                [2, $grandchild],
             ]);
+        $this->repository->method('findAncestorIds')
+            ->with(2)
+            ->willReturn([3, 1]);
 
         $input = new CategoryInput(parentId: 2);
 
@@ -226,7 +232,7 @@ class CategoryServiceTest extends TestCase
     public function testUpdateSelfParentThrowsCircularReference(): void
     {
         $category = $this->createCategory('Self', 1);
-        $this->repo->method('find')->with(1)->willReturn($category);
+        $this->repository->method('findById')->with(1)->willReturn($category);
 
         $input = new CategoryInput(parentId: 1);
 
@@ -239,13 +245,13 @@ class CategoryServiceTest extends TestCase
     public function testDeleteRemovesCategoryWithNoChildren(): void
     {
         $category = $this->createCategory('Solo', 1);
-        $this->repo->method('find')->with(1)->willReturn($category);
+        $this->repository->method('findById')->with(1)->willReturn($category);
 
-        $this->em->expects($this->once())->method('remove')->with($category);
-        $this->em->expects($this->once())->method('flush');
+        $this->repository->expects($this->once())->method('remove')->with($category);
 
         $this->service->delete(1);
 
+        $this->assertTrue($category->getChildren()->isEmpty());
         $this->addToAssertionCount(1);
     }
 
@@ -254,7 +260,7 @@ class CategoryServiceTest extends TestCase
         $parent = $this->createCategory('Parent', 1);
         $child = $this->createCategory('Child', 2);
         $this->addChild($parent, $child);
-        $this->repo->method('find')->with(1)->willReturn($parent);
+        $this->repository->method('findById')->with(1)->willReturn($parent);
 
         $this->expectException(CategoryHasChildrenException::class);
         $this->service->delete(1);
@@ -266,22 +272,24 @@ class CategoryServiceTest extends TestCase
     {
         $category = $this->createCategory('Toggle', 1);
         $category->setIsEnabled(false);
-        $this->repo->method('find')->with(1)->willReturn($category);
+        $this->repository->method('findById')->with(1)->willReturn($category);
 
         $result = $this->service->toggle(1, true);
 
         $this->assertTrue($result->isEnabled());
+        $this->assertSame('Toggle', $result->getName());
     }
 
     public function testToggleDisablesEnabledCategory(): void
     {
         $category = $this->createCategory('Toggle', 1);
         $category->setIsEnabled(true);
-        $this->repo->method('find')->with(1)->willReturn($category);
+        $this->repository->method('findById')->with(1)->willReturn($category);
 
         $result = $this->service->toggle(1, false);
 
         $this->assertFalse($result->isEnabled());
+        $this->assertSame('Toggle', $result->getName());
     }
 
     // ── move ─────────────────────────────────────────────────────
@@ -290,16 +298,17 @@ class CategoryServiceTest extends TestCase
     {
         $category = $this->createCategory('Mover', 1);
         $newParent = $this->createCategory('NewParent', 2);
-        $this->repo->method('find')
+        $this->repository->method('findById')
             ->willReturnMap([
-                [1, null, null, $category],
-                [2, null, null, $newParent],
+                [1, $category],
+                [2, $newParent],
             ]);
 
         $result = $this->service->move(1, 2, 99);
 
         $this->assertSame($newParent, $result->getParent());
         $this->assertSame(99, $result->getSortOrder());
+        $this->assertSame('Mover', $result->getName());
     }
 
     public function testMoveToNullParentMakesRoot(): void
@@ -307,31 +316,34 @@ class CategoryServiceTest extends TestCase
         $parent = $this->createCategory('OldParent', 2);
         $category = $this->createCategory('Orphan', 1);
         $this->addChild($parent, $category);
-        $this->repo->method('find')
+        $this->repository->method('findById')
             ->willReturnMap([
-                [1, null, null, $category],
+                [1, $category],
             ]);
 
         $result = $this->service->move(1, null, 0);
 
         $this->assertNull($result->getParent());
+        $this->assertSame(0, $result->getSortOrder());
+        $this->assertSame('Orphan', $result->getName());
     }
 
     public function testMoveCircularReferenceThrowsException(): void
     {
-        // Category 1 is parent of Category 3. Category 2 is child of Category 3.
-        // Attempting to move 1 under 2 makes it a child of its own descendant.
         $root = $this->createCategory('Root', 1);
         $child = $this->createCategory('Child', 3);
         $grandchild = $this->createCategory('Grandchild', 2);
         $this->addChild($root, $child);
         $this->addChild($child, $grandchild);
 
-        $this->repo->method('find')
+        $this->repository->method('findById')
             ->willReturnMap([
-                [1, null, null, $root],
-                [2, null, null, $grandchild],
+                [1, $root],
+                [2, $grandchild],
             ]);
+        $this->repository->method('findAncestorIds')
+            ->with(2)
+            ->willReturn([3, 1]);
 
         $this->expectException(CircularReferenceException::class);
         $this->service->move(1, 2, 0);
