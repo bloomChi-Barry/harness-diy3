@@ -1,6 +1,6 @@
 # 商品分类 API - 任务拆解
 
-总任务数: 11 | 已完成: 10 | 进度: 91%
+总任务数: 11 | 已完成: 11 | 进度: 100%
 
 | # | 任务 | 状态 | 依赖 | 证据 |
 |---|------|------|------|------|
@@ -14,6 +14,6 @@
 | 08 | Configure API documentation (NelmioApiDoc + Swagger) | ✅ completed | 07 | [查看](artifacts/08-configure-api-docs.log) |
 | 09 | Set up PHPUnit test infrastructure and CategoryService unit tests | ✅ completed | 05 | [查看](artifacts/09-service-unit-tests.log) |
 | 10 | Create PHPUnit controller integration tests (WebTestCase) | ✅ completed | 07, 09 | [查看](artifacts/10-controller-tests.log) |
-| 11 | Create verify.sh verification script and run QA checks | ⏳ pending | 08, 10 | - |
+| 11 | Create verify.sh verification script and run QA checks | ✅ completed | 08, 10 | [查看](artifacts/integration-verify.log) |
 
 状态图例：`⏳ pending` → `🚧 in_progress` → `✅ completed`
