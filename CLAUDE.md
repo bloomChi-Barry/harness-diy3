@@ -22,7 +22,7 @@ HTTP_PROXY=http://127.0.0.1:6244 HTTPS_PROXY=http://127.0.0.1:6244 composer ...
 
 ```bash
 # Start dev server
-php -S localhost:8000 -t public/
+php -S localhost:8000 -t public/ public/router.php
 
 # Symfony console
 php bin/console
