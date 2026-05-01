@@ -89,6 +89,10 @@ You MUST complete these steps in order:
 
 - 检查项目目录结构（`ls`、`Glob`），了解项目技术栈
 - 读取 `CLAUDE.md`（如有），了解项目约定
+- **读取知识库**：检查 `.claude/knowledge/` 目录，读取以下文件（如存在）：
+  - `verification-pitfalls.md` — 了解验证命令常见坑，避免在新任务中重复
+  - `bug-patterns.md` — 了解已知 bug 模式，设计任务时预判风险点
+  - `codebase-reality.md` — 了解 CLAUDE.md 未覆盖的实际约定
 - 为当前功能确定一个简短的项目名/标识符 `<feature-name>`
 
 ### Step 2: 结构化 Q&A
@@ -182,7 +186,7 @@ You MUST complete these steps in order:
 >
 > **在分解之前，必须先了解项目上下文：**
 > 1. 阅读项目根目录的 `CLAUDE.md`（如存在），了解编码约定、技术栈和项目规范
-> 2. 浏览 `app/`（或项目主要源码目录）的目录结构，了解现有模块组织方式
+> 2. 浏览项目源码目录的目录结构，了解现有模块组织方式
 > 3. 确认现有模块的接口和命名模式，确保新任务产出与现有代码风格一致
 >
 > **分解要求：**
@@ -190,8 +194,7 @@ You MUST complete these steps in order:
 > 2. 任务应按依赖关系排序（前置任务在前）
 > 3. 每个任务包含：标题、描述、验收标准、涉及文件
 > 4. 涉及文件路径必须基于实际项目结构，不能猜测或编造
-> 5. 输出格式为 JSON 数组，每项包含：id, title, description, acceptance_criteria, files, depends_on, **verification**
-> 6. **verification** 是字符串数组，每个元素是一条可直接在 bash 中执行的命令。所有命令将在 `set -e` 环境中执行，退出码 0 = 通过，非 0 = 失败。这是必填字段，不能为空数组，不能写 "TODO" 或 "请参见 verify.sh"。
+> 5. **verification** 是字符串数组，每个元素是一条可直接在 bash 中执行的命令。所有命令将在 `set -e` 环境中执行，退出码 0 = 通过，非 0 = 失败。这是必填字段，不能为空数组，不能写 "TODO" 或 "请参见 verify.sh"。
 >
 > **验证命令设计原则：**
 >
@@ -201,11 +204,18 @@ You MUST complete these steps in order:
 > 4. **参考验证模式** — 根据不同任务类型选择验证模式：安装类用 `composer show`，配置类用 `bin/console debug:config <真实alias>`，实体类用 `bin/console doctrine:schema:validate`，控制器类用 `bin/console debug:router`，测试类用 `php bin/phpunit --filter=X`。
 > 5. **考虑边界** — 不仅要验证正常路径，还要考虑：文件不存在、服务未启动、依赖缺失、权限不足等可能使命令静默失败的情况。
 >
-> 直接输出 JSON 结果，不要额外解释。
+> 输出一个带 fenced code block 的 Markdown 响应，其中包含：
+> - 每个任务一个 fenced block（语言标注为 `task-<NN>`，如 `task-01`），内容是完整的任务 Markdown 文件正文
+> - 一个 fenced block（语言标注为 `readme`），内容是完整的 `README.md` 正文
+> - 一个 fenced block（语言标注为 `bash`，标题为 `verify.sh`），内容是完整的 verify.sh 脚本
+>
+> 不要输出额外的解释文字，只输出上述 fenced code blocks。
 
-### Step 6: 输出任务文件
+### Step 6: 写入任务文件
 
-根据 Plan subagent 返回的结果，在 `docs/features/<feature-name>/tasks/` 下为每个任务创建一个 Markdown 文件：
+Plan subagent 响应中包含三个部分组成。直接将其写入磁盘：
+
+**6a. 创建目录结构：**
 
 ```
 docs/features/<feature-name>/tasks/
@@ -236,7 +246,7 @@ docs/features/<feature-name>/tasks/
 
 ## 验证方式
 
-<!-- 合约：feature-implement 逐条执行以下命令，退出码 0=通过，非0=失败。不得自行添加或修改命令。 -->
+<!-- 合约：feature-implement 逐条执行以下命令，退出码 0=通过，非0=失败。事实性错误（路径/文件名/alias）可在 artifact 中记录修正后执行，详见 feature-implement 验证修正协议。 -->
 
 ```bash
 <验证命令 1>
@@ -259,19 +269,37 @@ docs/features/<feature-name>/tasks/
 
 状态图例：`⏳ pending` → `🚧 in_progress` → `✅ completed`。证据列链接到 `artifacts/<NN>-<name>.log`。
 
-### Step 7: 生成验证脚本
+**6b. 写入任务文件：**
 
-在 `docs/features/<feature-name>/verify.sh` 生成一个可执行的 shell 验证脚本：
+从 Plan subagent 响应中提取每个 `task-NN` code block，写入对应文件 `tasks/<NN>-<slug>.md`。
+
+**6c. 写入 README.md：**
+
+从 Plan subagent 响应中提取 `readme` code block，写入 `tasks/README.md`。
+
+**6d. 创建 artifacts 目录：**
+
+```bash
+mkdir -p docs/features/<feature-name>/tasks/artifacts
+```
+
+### Step 7: 写入验证脚本
+
+从 Plan subagent 响应中提取 `verify.sh` code block，写入 `docs/features/<feature-name>/verify.sh` 并设置可执行权限：
+
+```bash
+cat > docs/features/<feature-name>/verify.sh << 'VERIFY_EOF'
+<Plan subagent 输出的 verify.sh 内容>
+VERIFY_EOF
+chmod +x docs/features/<feature-name>/verify.sh
+```
+
+verify.sh 必须包含以下结构：
 
 ```bash
 #!/bin/bash
 # 功能验证脚本 - <feature-name>
 # 用法: bash docs/features/<feature-name>/verify.sh
-#
-# 设计原则：
-# 1. 不使用 set -e（需要运行全部验证步骤并汇总结果）
-# 2. 每条验证的退出码 0=通过，非0=失败
-# 3. 由 generate_tasks.py 根据 Plan subagent 的 verification 字段自动生成
 
 set -o pipefail
 
@@ -279,7 +307,6 @@ PASS=0
 FAIL=0
 
 # run_and_check: 运行命令，根据退出码判定通过/失败
-# 用法: run_and_check "描述" command arg1 arg2 ...
 run_and_check() {
     local desc="$1"
     shift
@@ -297,7 +324,6 @@ run_and_check() {
 }
 
 # check_eq: 比较实际值与期望值
-# 用法: check_eq "描述" "期望值" "实际值"
 check_eq() {
     local desc="$1"
     local expected="$2"
@@ -315,7 +341,6 @@ echo "===== <功能名> 验证开始 ====="
 echo ""
 
 # ==================== 任务级验证 ====================
-# 以下由 generate_tasks.py 根据 Plan subagent 的 verification 字段自动生成
 
 # --- 任务 01: <标题> ---
 # (if-block 验证命令)
@@ -325,6 +350,8 @@ echo "===== <功能名> 验证结束 ====="
 echo "通过: $PASS, 失败: $FAIL"
 [ $FAIL -eq 0 ] || exit 1
 ```
+
+**6b-7 完成后立即提交 git**（commit message: `docs(<feature-name>): add task breakdown and verification script`）。
 
 ---
 
@@ -431,7 +458,16 @@ php bin/phpunit
 
 ---
 
-### Step 8: 总结交付
+### Step 8: 回写知识库
+
+如果本次分析过程中发现了值得记录的教训（如某个验证命令设计容易出错、某个项目约定在 CLAUDE.md 中缺失等），追加到对应的知识库文件：
+
+- `.claude/knowledge/verification-pitfalls.md` — 验证命令设计中的坑
+- `.claude/knowledge/codebase-reality.md` — CLAUDE.md 未覆盖的实际约定
+
+格式遵循各文件自身的条目格式。
+
+### Step 9: 总结交付
 
 向用户总结交付内容：
 

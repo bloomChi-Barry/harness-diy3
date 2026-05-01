@@ -97,6 +97,9 @@ You MUST complete these steps in order:
 
 - 检查项目目录结构，了解技术栈和模块组织
 - 读取 `CLAUDE.md`，了解编码约定和项目规范
+- **读取知识库**：检查 `.claude/knowledge/` 目录，读取以下文件（如存在）：
+  - `codebase-reality.md` — 了解 CLAUDE.md 未覆盖的实际约定
+  - `bug-patterns.md` — 了解已知 bug 模式，避免重构时引入已知问题
 - 确定重构目标的文件路径和大致范围
 - 为当前重构确定一个简短的标识符 `<refactor-name>`（kebab-case）
 
@@ -476,7 +479,11 @@ EOF
 >
 > 运行 `git log --oneline` 查看提交历史。
 
-### Step 9: 记录到路线图
+### Step 9: 回写知识库
+
+如果重构中发现了值得记录的模式（如某种代码结构反复导致问题、某个约定在 CLAUDE.md 中缺失但在代码中实际存在），追加到 `.claude/knowledge/codebase-reality.md`。
+
+### Step 10: 记录到路线图
 
 重构提交完成后，调用 roadmap skill 记录本次迭代：
 

@@ -79,6 +79,9 @@ You MUST complete these steps in order:
 
 - 检查项目目录结构，了解项目技术栈
 - 读取 `CLAUDE.md`（如有），了解项目约定
+- **读取知识库**：检查 `.claude/knowledge/` 目录，读取以下文件（如存在）：
+  - `bug-patterns.md` — 了解已知 bug 模式，对比当前问题是否与已知模式匹配
+  - `codebase-reality.md` — 了解实际代码约定，避免修复与现有模式不一致
 - 为当前 BUG 确定一个简短的标识符 `<bug-name>`（kebab-case）
 
 ### Step 2: 结构化 Q&A
@@ -294,7 +297,11 @@ EOF
 >
 > 运行 `git log --oneline` 查看提交历史。
 
-### Step 9: 记录到路线图
+### Step 9: 回写知识库
+
+如果本次修复发现了可复现的 bug 模式（如某种错误处理不完整、某类 API 调用容易出错），追加到 `.claude/knowledge/bug-patterns.md`。如果发现 CLAUDE.md 未覆盖的约定，追加到 `.claude/knowledge/codebase-reality.md`。
+
+### Step 10: 记录到路线图
 
 修复提交完成后，调用 roadmap skill 记录本次迭代：
 

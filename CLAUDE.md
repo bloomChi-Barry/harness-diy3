@@ -45,10 +45,10 @@ vendor/bin/phpstan analyze
 
 ### Architecture
 
-- Standard Symfony 7.2 microkernel (`Kernel` + `MicroKernelTrait`) with `FrameworkBundle` as the only bundle — no Doctrine, no Twig.
+- Symfony 7.2 microkernel (`Kernel` + `MicroKernelTrait`) with three bundles: `FrameworkBundle`, `DoctrineBundle` (ORM), `NelmioApiDocBundle` (Swagger/OpenAPI).
 - **Routing**: controller attributes (`#[Route]`) — see `config/routes.yaml` which maps `App\Controller\` to `../src/Controller/`.
 - **DI**: autowiring and autoconfiguration enabled by default (`config/services.yaml`). Every class under `src/` becomes a service automatically.
-- **PHPStan level 6** with Symfony extension (`phpstan/phpstan-symfony`).
+- **PHPStan level 6** with `phpstan/phpstan-symfony` and `phpstan/phpstan-doctrine` extensions.
 
 ## Best Practices
 
@@ -61,13 +61,17 @@ src/
   Controller/   — thin layer: parse request, call service, return response
   Service/      — business logic lives here
   Dto/          — data transfer objects for request/response boundaries
+  Entity/       — Doctrine ORM entities (database table mappings)
+  Repository/   — data access layer (Doctrine repositories)
   Exception/    — domain-specific exceptions
+  EventListener/ — Symfony event listeners (e.g. exception → JSON)
 ```
 
 - **Controllers** must not contain business logic. They parse input, delegate to a service, and return a response. If a controller action exceeds ~15 lines, it's doing too much.
 - **Services** are where business rules, transformations, and orchestration happen. One service class per logical domain (e.g. `UserService`, `OrderService`).
 - **DTOs** (data transfer objects): use `readonly` classes with constructor promotion to define request/response shapes at system boundaries. This keeps internals decoupled from HTTP details.
-- **No repository layer** — this project has no Doctrine ORM, so data access belongs in the service or a dedicated client/adapter class if it grows complex.
+- **Entities**: Doctrine ORM entities with PHP 8 attributes (`#[ORM\Entity]`, `#[ORM\Column]`). Entities map to database tables and define the data model.
+- **Repositories**: one interface per entity (e.g. `CategoryRepositoryInterface`) plus a Doctrine implementation. Services depend on the interface, keeping persistence details behind a contract.
 
 ### PSR Compliance
 
