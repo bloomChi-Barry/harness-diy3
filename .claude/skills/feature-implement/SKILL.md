@@ -360,6 +360,16 @@ EOF
 >
 > 运行 `git log --oneline` 查看提交历史。运行 `cat docs/features/<feature-name>/tasks/artifacts/*.log` 查看所有验证证据。
 
+### Step 6: 记录到路线图
+
+全部任务完成并提交后，调用 roadmap skill 记录本次迭代：
+
+```
+/roadmap feat <feature-name>
+```
+
+roadmap skill 将从 `docs/features/<feature-name>/` 读取产物、从 git log 提取关联提交，生成 ROADMAP.md 条目并提交。
+
 ---
 
 ## 🧠 Reasoning Strategy

@@ -294,6 +294,16 @@ EOF
 >
 > 运行 `git log --oneline` 查看提交历史。
 
+### Step 9: 记录到路线图
+
+修复提交完成后，调用 roadmap skill 记录本次迭代：
+
+```
+/roadmap fix <bug-name>
+```
+
+roadmap skill 将从 `docs/bugs/<bug-name>/BUG.md` 读取分析内容、从 git log 提取关联提交，生成 ROADMAP.md 条目并提交。
+
 ---
 
 ## 🧠 Reasoning Strategy
