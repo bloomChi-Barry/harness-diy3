@@ -64,7 +64,6 @@ class CategoryController
     #[OA\Post(
         path: '/api/categories',
         summary: 'Create a category',
-        tags: ['Categories'],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
@@ -82,6 +81,7 @@ class CategoryController
                 type: 'object'
             )
         ),
+        tags: ['Categories'],
         responses: [
             new OA\Response(response: 201, description: 'Category created'),
             new OA\Response(response: 400, description: 'Validation error'),
@@ -114,10 +114,6 @@ class CategoryController
     #[OA\Put(
         path: '/api/categories/{id}',
         summary: 'Update a category',
-        tags: ['Categories'],
-        parameters: [
-            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
-        ],
         requestBody: new OA\RequestBody(
             content: new OA\JsonContent(
                 properties: [
@@ -133,6 +129,10 @@ class CategoryController
                 type: 'object'
             )
         ),
+        tags: ['Categories'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+        ],
         responses: [
             new OA\Response(response: 200, description: 'Category updated'),
             new OA\Response(response: 404, description: 'Category not found'),
@@ -183,10 +183,6 @@ class CategoryController
     #[OA\Patch(
         path: '/api/categories/{id}/toggle',
         summary: 'Toggle category enabled status',
-        tags: ['Categories'],
-        parameters: [
-            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
-        ],
         requestBody: new OA\RequestBody(
             content: new OA\JsonContent(
                 required: ['is_enabled'],
@@ -196,6 +192,10 @@ class CategoryController
                 type: 'object'
             )
         ),
+        tags: ['Categories'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+        ],
         responses: [
             new OA\Response(response: 200, description: 'Toggle result'),
             new OA\Response(response: 404, description: 'Category not found'),
@@ -213,10 +213,6 @@ class CategoryController
     #[OA\Patch(
         path: '/api/categories/{id}/move',
         summary: 'Move a category in the tree',
-        tags: ['Categories'],
-        parameters: [
-            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
-        ],
         requestBody: new OA\RequestBody(
             content: new OA\JsonContent(
                 properties: [
@@ -226,6 +222,10 @@ class CategoryController
                 type: 'object'
             )
         ),
+        tags: ['Categories'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+        ],
         responses: [
             new OA\Response(response: 200, description: 'Category moved'),
             new OA\Response(response: 404, description: 'Category not found'),

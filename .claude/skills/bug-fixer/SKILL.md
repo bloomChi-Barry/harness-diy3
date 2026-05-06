@@ -79,9 +79,7 @@ You MUST complete these steps in order:
 
 - 检查项目目录结构，了解项目技术栈
 - 读取 `CLAUDE.md`（如有），了解项目约定
-- **读取知识库**：检查 `.claude/knowledge/` 目录，读取以下文件（如存在）：
-  - `bug-patterns.md` — 了解已知 bug 模式，对比当前问题是否与已知模式匹配
-  - `codebase-reality.md` — 了解实际代码约定，避免修复与现有模式不一致
+- **读取知识库**：遵循 `.claude/knowledge/knowledge-base-protocol.md` 读取项目知识库
 - 为当前 BUG 确定一个简短的标识符 `<bug-name>`（kebab-case）
 
 ### Step 2: 结构化 Q&A
@@ -203,13 +201,7 @@ You MUST complete these steps in order:
 
 #### 5c: Code Quality Gate（代码质量门禁）
 
-修复代码后、验证前，运行项目代码质量检查：
-
-1. **自动修复代码风格** —— 执行 `CLAUDE.md` 中 `## Code Quality` 定义的格式化命令
-2. **静态分析检查** —— 执行 `CLAUDE.md` 中 `## Code Quality` 定义的静态分析命令
-3. 格式化修复产生的 diff 自动纳入当前变更
-4. 静态分析失败 → 修复代码 → 重新检查（计入 3 轮上限）
-5. 两项检查全部通过后，进入验证步骤
+遵循 `.claude/knowledge/code-quality-gate.md` 执行代码质量门禁（格式化 → 静态分析）。通过后方可进入验证步骤。
 
 ### Step 6: 验证修复
 
@@ -224,11 +216,11 @@ You MUST complete these steps in order:
 # 将验证命令写入临时脚本
 cat > /tmp/verify-bug-<bug-name>.sh << 'VERIFY_EOF'
 #!/bin/bash
-set -e
+set -eo pipefail
 # ... fix-plan.md 中的验证命令 ...
 VERIFY_EOF
 bash /tmp/verify-bug-<bug-name>.sh 2>&1 | tee docs/bugs/<bug-name>/artifacts/verify.log
-VERIFY_EXIT=$?
+VERIFY_EXIT=${PIPESTATUS[0]}
 ```
 
 产物文件头部需包含元信息：
@@ -247,25 +239,7 @@ printf "# BUG 修复验证: <bug-name>\n# 验证时间: %s\n" "$TIMESTAMP" > "$A
 
 #### 6c. 修复循环（最多 3 轮）
 
-```
-验证失败
-    ↓
-分析 artifacts/verify.log 中的失败输出 → 定位问题
-    ↓
-修改代码 → 重新运行质量检查 → 重新验证（覆盖写入）
-    ↓
-仍失败且 < 3 轮 → 回到分析
-    ↓
-3 轮仍未通过 → 暂停，产物文件保留最后一轮失败日志
-```
-
-- 每轮修复聚焦于失败输出的具体信息
-- 不要猜测 —— 根据 `artifacts/verify.log` 中的错误信息精准修改
-- 3 轮后仍未通过，向用户清晰说明：
-  - 哪个验证失败
-  - 已尝试的修复方式
-  - 产物文件路径
-  - 建议的下一步
+遵循 `.claude/knowledge/verification-conventions.md` 中的 3 轮修复循环模式。
 
 ### Step 7: 提交修复
 

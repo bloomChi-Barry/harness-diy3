@@ -89,10 +89,7 @@ You MUST complete these steps in order:
 
 - 检查项目目录结构（`ls`、`Glob`），了解项目技术栈
 - 读取 `CLAUDE.md`（如有），了解项目约定
-- **读取知识库**：检查 `.claude/knowledge/` 目录，读取以下文件（如存在）：
-  - `verification-pitfalls.md` — 了解验证命令常见坑，避免在新任务中重复
-  - `bug-patterns.md` — 了解已知 bug 模式，设计任务时预判风险点
-  - `codebase-reality.md` — 了解 CLAUDE.md 未覆盖的实际约定
+- **读取知识库**：遵循 `.claude/knowledge/knowledge-base-protocol.md` 读取项目知识库
 - 为当前功能确定一个简短的项目名/标识符 `<feature-name>`
 
 ### Step 2: 结构化 Q&A
@@ -198,11 +195,8 @@ You MUST complete these steps in order:
 >
 > **验证命令设计原则：**
 >
-> 1. **退出码即判定** — feature-implement 只检查退出码，不解读命令输出。每条命令必须能通过退出码表达通过/失败。
-> 2. **不许人工判断** — 禁止 "手动 curl 测试"、"查看浏览器"、"检查日志输出" 等步骤。所有验证必须全自动。
-> 3. **真实命令 alias** — Symfony bundle 的 config alias 必须来自 `bin/console debug:config --list` 的实际输出。例如 validator 的配置在 `framework` extension 下，没有独立的 `framework.validation` alias。不确定时宁可不用也不要猜测。
-> 4. **参考验证模式** — 根据不同任务类型选择验证模式：安装类用 `composer show`，配置类用 `bin/console debug:config <真实alias>`，实体类用 `bin/console doctrine:schema:validate`，控制器类用 `bin/console debug:router`，测试类用 `php bin/phpunit --filter=X`。
-> 5. **考虑边界** — 不仅要验证正常路径，还要考虑：文件不存在、服务未启动、依赖缺失、权限不足等可能使命令静默失败的情况。
+> 1. 在分解任务前，先读取 `.claude/knowledge/verification-conventions.md`，了解退出码约定、shell 脚本约定、Symfony 验证模式和反模式清单。
+> 2. 每个任务的 `verification` 字段中的所有命令必须遵循该文件中的全部约定。
 >
 > 输出一个带 fenced code block 的 Markdown 响应，其中包含：
 > - 每个任务一个 fenced block（语言标注为 `task-<NN>`，如 `task-01`），内容是完整的任务 Markdown 文件正文
@@ -357,104 +351,18 @@ echo "通过: $PASS, 失败: $FAIL"
 
 ## 📐 验证设计指南
 
-本章节规范了如何为任务设计可靠、可自动执行的验证命令。Plan subagent 在设计每个任务的 `verification` 字段时必须遵循本指南。
+**设计验证命令时遵循 `.claude/knowledge/verification-conventions.md`。** 该文件是退出码约定、shell 脚本约定、Symfony 验证模式速查和反模式清单的唯一权威来源。
+
+以下是对 feature-analyzer 特别重要的设计原则：
 
 ### 黄金法则
 
-1. **退出码即判定** — 每条验证命令必须产生明确的退出码。0 = 通过，非 0 = 失败。feature-implement 不解读命令输出，只检查退出码。
-2. **全自动执行** — 不存在"手动检查"、"查看浏览器"、"阅读日志并判断"等人工步骤。
-3. **真实命令 alias** — Symfony bundle 的 config extension alias 必须来自 `bin/console debug:config --list` 的实际输出。绝不猜测或编造 alias。例如 `framework.validation` 不是独立 alias，validator 配置在 `framework` 下。
-4. **set -e 安全** — 所有验证命令在 `set -e` 环境中执行。任一命令失败即中止后续命令。命令必须幂等且不产生副作用。
-5. **边界覆盖** — 验证命令不仅覆盖正常路径，也覆盖可自动检测的边界情况（文件缺失、语法错误、schema 不一致等）。
+1. **退出码即判定** — 每条验证命令必须产生明确的退出码。0 = 通过，非 0 = 失败。
+2. **全自动执行** — 不存在"手动检查"、"查看浏览器"等人工步骤。
+3. **真实命令 alias** — Symfony config alias 必须来自 `bin/console debug:config --list` 的实际输出。
+4. **边界覆盖** — 验证命令不仅覆盖正常路径，也覆盖可自动检测的边界情况。
 
-### 按任务类型的验证模式
-
-#### 安装依赖（install）
-```bash
-cd app/demo-backend-api
-HTTP_PROXY=http://127.0.0.1:6244 HTTPS_PROXY=http://127.0.0.1:6244 composer show symfony/validator --quiet
-```
-
-#### 配置组件（config）
-```bash
-cd app/demo-backend-api
-# ✅ 使用 debug:config 检查扩展配置（alias 必须真实存在）
-php bin/console debug:config doctrine
-# ✅ 验证 framework 下的 validation 配置
-php bin/console debug:config framework
-# ✅ 验证 schema 一致性
-php bin/console doctrine:schema:validate
-
-# ❌ 反模式：猜测不存在的 alias
-# php bin/console debug:config framework.validation  # 这会报错！不是独立 extension
-```
-
-#### 数据库（database）
-```bash
-cd app/demo-backend-api
-php bin/console doctrine:database:create
-php bin/console doctrine:schema:create --dump-sql
-```
-
-#### 实体类（entity）
-```bash
-cd app/demo-backend-api
-php -l src/Entity/SomeEntity.php                          # 语法检查
-php bin/console doctrine:schema:validate                   # Schema 验证
-grep -q '#\[ORM\\Entity' src/Entity/SomeEntity.php         # 属性检查
-```
-
-#### 服务类（service）
-```bash
-cd app/demo-backend-api
-php -l src/Service/SomeService.php
-php bin/phpunit --filter=SomeServiceTest
-```
-
-#### 控制器（controller）
-```bash
-cd app/demo-backend-api
-php -l src/Controller/SomeController.php
-php bin/console debug:router | grep -q "api/endpoint_name"  # 路由注册验证
-php bin/phpunit --filter=SomeControllerTest                 # 集成测试
-```
-
-#### 测试（tests）
-```bash
-cd app/demo-backend-api
-php bin/phpunit --filter=SpecificTestName
-```
-
-#### 质量检查（QA）
-```bash
-cd app/demo-backend-api
-vendor/bin/php-cs-fixer fix --allow-unsupported-php-version true --dry-run
-vendor/bin/phpstan analyze
-php bin/phpunit
-```
-
-### 反模式清单
-
-| 反模式 | 错误示例 | 问题 |
-|--------|----------|------|
-| 猜测 bundle alias | `debug:config framework.validation` | `framework.validation` 不是注册的 config extension；应直接用 `framework` |
-| 手动步骤 | `# 手动 curl 测试各端点` 或 `请参见 verify.sh` | 无自动化，无退出码，feature-implement 无法判定 |
-| 依赖调试输出格式 | `debug:config X \| grep -A6 validation` | 调试输出格式不稳定，且管道可能隐藏退出码 |
-| 无退出码的判据 | `local desc="$1"; if [ $? -eq 0 ]` | `local` 总是返回 0，`$?` 检测的是 `local` 而非验证命令 |
-| 缺少 pipefail | `command \| grep -q pattern`（未设置 `set -o pipefail`） | command 失败时的退出码被 grep 覆盖 |
-| 纯 echo 无判据 | `echo "请检查输出是否正确"` | 无判定逻辑，退出码总是 0 |
-| 环境假设 | 假设 localhost:8000 始终可用 | 端口可能被占用，服务可能未启动，静默失败 |
-
-### 退出码的硬性约定
-
-- `0` = 验证通过
-- 任何非 0 = 验证失败
-- 使用临时脚本时 `set -e` 确保任一命令失败即中止
-- `set -o pipefail` 确保管道中任一命令失败则整体失败
-- `grep -q` 匹配到返回 0，未匹配到返回 1
-- `php bin/phpunit` 任意测试失败即返回非 0
-- `vendor/bin/php-cs-fixer fix --dry-run` 需要修复时返回非 0
-- `vendor/bin/phpstan analyze` 有任何错误即返回非 0
+**反模式清单和按任务类型的验证模式见 `.claude/knowledge/verification-conventions.md`。**
 
 ---
 

@@ -97,9 +97,7 @@ You MUST complete these steps in order:
 
 - 检查项目目录结构，了解技术栈和模块组织
 - 读取 `CLAUDE.md`，了解编码约定和项目规范
-- **读取知识库**：检查 `.claude/knowledge/` 目录，读取以下文件（如存在）：
-  - `codebase-reality.md` — 了解 CLAUDE.md 未覆盖的实际约定
-  - `bug-patterns.md` — 了解已知 bug 模式，避免重构时引入已知问题
+- **读取知识库**：遵循 `.claude/knowledge/knowledge-base-protocol.md` 读取项目知识库
 - 确定重构目标的文件路径和大致范围
 - 为当前重构确定一个简短的标识符 `<refactor-name>`（kebab-case）
 
@@ -382,13 +380,7 @@ Step N: <重构手法>
 
 #### 6c: Code Quality Gate（代码质量门禁）
 
-**每步变换后**运行项目代码质量检查：
-
-1. **自动修复代码风格** —— 执行 `CLAUDE.md` 中 `## Code Quality` 定义的格式化命令
-2. **静态分析检查** —— 执行 `CLAUDE.md` 中 `## Code Quality` 定义的静态分析命令
-3. 格式化修复产生的 diff 自动纳入当前变更
-4. 静态分析失败 → 修复代码 → 重新检查（计入 3 轮上限）
-5. 两项检查全部通过后，方可运行测试验证
+**每步变换后**遵循 `.claude/knowledge/code-quality-gate.md` 执行代码质量门禁（格式化 → 静态分析）。两项检查全部通过后，方可运行测试验证。
 
 ### Step 7: 最终验证
 
@@ -432,7 +424,7 @@ METRICS_EOF
 
 #### 7d. 验证失败处理
 
-- ❌ 测试失败 → 回到 Step 6 执行修复循环（最多 3 轮）
+- ❌ 测试失败 → 回到 Step 6，遵循 `.claude/knowledge/verification-conventions.md` 中的 3 轮修复循环模式
 - ❌ 静态分析新增错误 → 修复代码后重新运行 7a-7c
 - ❌ 指标没有改善甚至恶化 → 如实报告用户，由用户决定是否接受
 

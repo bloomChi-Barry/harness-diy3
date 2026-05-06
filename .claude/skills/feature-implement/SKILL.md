@@ -83,9 +83,7 @@ You MUST complete these steps in order:
 - 若用户提供了 feature 名称，直接定位 `docs/features/<feature-name>/`
 - 若未提供，列出 `docs/features/` 下的子目录让用户选择
 - 验证目录下存在 `tasks/README.md`（由 feature-analyzer 生成）
-- **读取知识库**：检查 `.claude/knowledge/` 目录，读取以下文件（如存在）：
-  - `verification-pitfalls.md` — 了解已知验证命令坑，预检时重点排查
-  - `codebase-reality.md` — 了解实际代码约定，避免实现与现有模式不一致
+- **读取知识库**：遵循 `.claude/knowledge/knowledge-base-protocol.md` 读取项目知识库
 
 ### Step 2: 加载任务列表
 
@@ -179,20 +177,9 @@ You MUST complete these steps in order:
 
 #### 3c-bis: Code Quality Gate（代码质量门禁）
 
-实现代码后、任务验证前，运行项目代码质量检查：
+遵循 `.claude/knowledge/code-quality-gate.md` 执行代码质量门禁。feature-implement 需额外完成 Step 3（注释完整性自查）：逐文件检查本次变更中每个新增类是否有类级 docblock、每个新增公共方法是否有 `@param` 和 `@return` 标注、非直观逻辑是否有行内注释解释 WHY、DTO 每个属性是否有业务含义说明。
 
-1. **自动修复代码风格** — 执行 `CLAUDE.md` 的 `## Code Quality` 章节中定义的格式化命令
-2. **静态分析检查** — 执行 `CLAUDE.md` 的 `## Code Quality` 章节中定义的静态分析命令
-3. **注释完整性自查** — 逐文件检查本次变更：
-   - 每个新增类是否有类级 docblock
-   - 每个新增公共方法是否有 `@param` 和 `@return` 标注
-   - 非直观逻辑是否有行内注释解释 WHY
-   - DTO 每个属性是否有业务含义说明
-4. 格式化修复产生的 diff 自动纳入当前变更
-5. 静态分析或注释检查失败 → 进入 3f 修复循环（计入 3 轮上限），每轮修复后重新运行：格式化 → 静态分析 → 注释检查 → 任务验证
-6. 三项检查全部通过后，方可进入 3e 任务验证
-
-**注意**：格式化与静态分析命令以 `CLAUDE.md` 中的定义为准。如项目无 `CLAUDE.md` 或其中无 `## Code Quality` 章节，跳过格式化与静态分析步骤，但「注释完整性自查」仍然必须执行。
+质量门禁通过后方可进入 3e 任务验证。
 
 #### 3d. 运行时任务调整
 
@@ -241,63 +228,21 @@ You MUST complete these steps in order:
 
 1. 确保产物目录存在：`mkdir -p docs/features/<feature-name>/tasks/artifacts`
 2. 从任务文件中的「验证方式」区域提取 bash 命令
-3. **验证命令预检与修正协议**（执行前）— 对每条验证命令进行分类，按级别处理：
-
-**级别 1 — 反模式（🛑 暂停，报告用户）：**
-- 命令为空或为占位符（如 `⚠️ 未定义验证命令`）
-- 命令含 `手动` / `manual` / `浏览器` / `请参见`
-- 命令含 `TODO` / `⚠️` 占位符
-- 纯 echo/printf 语句，无判定逻辑
-- **检测到级别 1 → 暂停，向用户报告具体任务、具体命令、具体问题。禁止自行修正。**
-
-**级别 2 — 事实性错误（🔧 允许修正，记录审计追踪）：**
-- API 路径/路由错误（如 `/api/category` 应为 `/api/categories`）
-- 文件名/类名不存在（如 `src/Entity/Product.php` 但实际文件是 `src/Entity/Item.php`）
-- Symfony config alias 错误（如 `debug:config framework.validation` 应为 `debug:config framework`）
-- 命令语法错误导致无法执行（如缺少必选参数）
-- 端口/主机等环境差异（如 `localhost:8080` 应为 `localhost:8000`）
-- **检测到级别 2 → 修正命令，记录修正到 artifact 文件头部，然后继续执行。修正格式：**
-
-```bash
-ARTIFACT="docs/features/<feature-name>/tasks/artifacts/<NN>-<task-name>.log"
-TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
-printf "# 任务 <NN>: <任务标题>\n" > "$ARTIFACT"
-printf "# 验证时间: %s\n" "$TIMESTAMP" >> "$ARTIFACT"
-printf "#\n" >> "$ARTIFACT"
-printf "# ⚠️ VERIFICATION AMENDED (%d change(s))\n" <N> >> "$ARTIFACT"
-printf "#   [01] 原: <original command>\n" >> "$ARTIFACT"
-printf "#        修正: <amended command>\n" >> "$ARTIFACT"
-printf "#        原因: <brief reason>\n" >> "$ARTIFACT"
-printf "#\n" >> "$ARTIFACT"
-```
-
-修正完成后，将修正信息写入 `.claude/knowledge/verification-pitfalls.md`（追加一行，格式：`- <日期>: <问题简述> — 原命令 → 修正后命令`）。如果 knowledge 目录不存在，创建它。
-
-**级别 3 — 逻辑性差异（🟡 报告用户，附建议）：**
-- 断言过宽或过严（如检查了多余字段，或遗漏了关键断言）
-- 验证范围过大（如一个任务里验证了多个不相关的功能）
-- 命令逻辑正确但验收标准可能不适合
-- **检测到级别 3 → 不暂停，继续执行原命令。但在 artifact 文件头部追加 `# ⚠️ VERIFICATION NOTE: <具体问题>` 备注。任务完成后在总结中向用户报告所有级别 3 备注。**
-
-**修正审计追踪总则：**
-- 所有修正记录在 artifact 文件头部（`# ⚠️ VERIFICATION AMENDED` 块），对用户完全透明
-- 事实性错误修正后，feature-implement 将所有修正信息写入 `.claude/knowledge/verification-pitfalls.md`
-- 严禁借"级别 2 修正"之名实质降低验收标准——修正必须使命令更准确，而非更宽松
-- 同一条命令连续 2 次被修正 → 暂停，升级为级别 1 处理
+3. **验证命令预检**：遵循 `.claude/knowledge/verification-conventions.md` 中的三级预检协议。Level 2 修正必须记录在 artifact 文件头部（修正格式见该文件），修正完成后将修正信息写入 `.claude/knowledge/verification-pitfalls.md`。
 
 4. **执行验证命令**（使用修正后的命令，如有级别 2 修正）：
 5. **逐条检查退出码**：将命令写入临时脚本，`set -e` 开头，每条命令前加 `echo` 分隔符标识步骤；任一条命令失败（非零退出码）即整体失败
 6. 将验证命令输出**同时**打印到终端并写入产物文件：
 
 ```bash
-# 将任务验证命令写入临时脚本（set -e 确保任一步失败即中止）
+# 将任务验证命令写入临时脚本（set -eo pipefail 确保任一步失败即中止，管道中任一命令失败也中止）
 cat > /tmp/verify-task-<NN>.sh << 'VERIFY_EOF'
 #!/bin/bash
-set -e
+set -eo pipefail
 # ... 任务「验证方式」中的命令（含级别 2 修正），每条前加 echo 分隔符 ...
 VERIFY_EOF
 bash /tmp/verify-task-<NN>.sh 2>&1 | tee -a docs/features/<feature-name>/tasks/artifacts/<NN>-<task-name>.log
-VERIFY_EXIT=$?
+VERIFY_EXIT=${PIPESTATUS[0]}
 ```
 
 产物文件头部需包含元信息（在运行前写入，见上一步修正格式）。
@@ -310,27 +255,7 @@ VERIFY_EXIT=$?
 
 #### 3f. 修复循环（最多 3 轮）
 
-```
-验证失败（产物文件末尾已有 ❌ FAILED）
-    ↓
-分析 artifacts/<NN>-*.log 中的失败输出 → 定位问题根因
-    ↓
-修改代码 → 重新验证（覆盖写入产物文件）
-    ↓
-仍失败且 < 3 轮 → 回到分析
-    ↓
-3 轮仍未通过 → 暂停，产物文件保留最后一轮失败日志
-```
-
-- 每轮修复聚焦于失败输出的具体信息（含静态分析错误、任务验收失败、注释缺失）
-- 每轮修复后按顺序重新运行：格式化 → 静态分析 → 注释检查 → 任务验证，确认全部通过
-- 不要猜测 — 根据 `artifacts/<NN>-*.log` 中的错误信息精准修改
-- 每轮重新验证时覆盖写入产物文件（保留最新一轮结果）
-- 3 轮后仍未通过，向用户清晰说明：
-  - 哪个验收标准失败
-  - 已尝试的修复方式
-  - 产物文件路径（供用户查看完整输出）
-  - 建议的下一步
+遵循 `.claude/knowledge/verification-conventions.md` 中的 3 轮修复循环模式。每轮修复后按顺序重新运行：质量门禁（格式化 → 静态分析 → 注释检查）→ 任务验证。
 
 #### 3g. 标记完成
 
@@ -447,32 +372,9 @@ roadmap skill 将从 `docs/features/<feature-name>/` 读取产物、从 git log 
 
 ---
 
-### 验证命令反模式速查
+### 验证命令预检
 
-feature-implement 在执行验证前必须按三级分类检查每条验证命令：
-
-**级别 1 — 反模式（🛑 暂停，报告用户，禁止自行修正）：**
-
-| 反模式 | 检测方式 | 错误示例 |
-|--------|----------|----------|
-| 手动步骤 | 命令含 `手动`/`manual`/`浏览器` | `# 手动 curl 测试各端点` |
-| 占位符/TODO | 命令含 `请参见`/`TODO`/`⚠️` | `请参见 verify.sh 中对应的验证步骤` |
-| 只输出不判定 | 纯 echo/printf 语句 | `echo "检查输出是否正确"` |
-| 空验证 | 验证方式为空或仅为注释 | `<!-- TODO -->` |
-
-**级别 2 — 事实性错误（🔧 允许修正，记录审计追踪）：**
-
-| 错误类型 | 检测方式 | 修正原则 |
-|----------|----------|----------|
-| 猜测 bundle alias | Symfony `debug:config <非标准alias>` | 用 `bin/console debug:config --list` 查出真实 alias |
-| 路径/文件名错误 | 文件不存在或 `php -l` 报错 | 核对实际文件路径后修正 |
-| API 路由错误 | `bin/console debug:router` 无匹配 | 用真实路由路径替换 |
-| 端口/主机错误 | 连接被拒绝 | 匹配项目实际端口 |
-
-**级别 3 — 逻辑性差异（🟡 备注，不暂停）：**
-断言过宽/过严、验证范围过大。记录到 artifact 头部，任务完成后汇总报告用户。
-
-**重要：级别 1 → 暂停并报告。级别 2 → 修正 + 审计追踪。级别 3 → 备注继续。严禁借"级别 2 修正"之名降低验收标准。**
+验证命令三级预检协议（Level 1 反模式 / Level 2 事实性错误 / Level 3 逻辑差异）的完整定义见 `.claude/knowledge/verification-conventions.md`。
 
 ---
 
